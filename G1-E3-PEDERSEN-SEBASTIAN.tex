@@ -70,6 +70,8 @@
 \newcommand{\gp}{\ensuremath{\mathcal{GP}}}
 
 
+%\setcounter{tocdepth}{2} %para profundidad table of contents
+
 
 \title{Procesos gaussianos: metodología y aplicaciones\\ Taller de Tesis I - Entrega 3\\ Maestría en Explotación de Datos y Descubrimiento del Conocimiento -- UBA 2023 cuat. 1}% \\
 %\textbf{VERSIÓN PRELIMINAR}}
@@ -98,10 +100,11 @@
 		En este trabajo se estudian a los procesos gaussianos y su aplicabilidad para predecir series de tiempo, en particular series de tiempo de producción de hidrocarburos. Los procesos gaussianos son un método no paramétro probabilístico de regresión. Es este trabajo por un lado se indaga metodológicamente a los procesos gaussianos, explicitándose sus virtudes y limitaciones teóricas (modelado por gaussianas, incertidumbre natural, etc.). Y por otro lado se aplican los procesos gaussianos para predecir la producción mensual de hidrocarburos en la Argentina, encontrándose las dificultades típicas del caso (diseño del kernel, elección y optimización de los parámetros, etc.). Los resultados de este trabajo, si bien con las dificultades antes mencionadas, por lo menos hacen que la técnica merezca más tiempo de estudio y experimentación, pues a primer análisis y experimentación predice dentro de límites razonables (o, si no es el caso hay indicios suficientes para suponer que podría hacerlo).
 	\end{abstract}
 
-	\tableofcontents
+\newpage
+\tableofcontents
 
 
-
+\newpage
 \section{Introducción}
 \label{sec:introd}
 
@@ -244,7 +247,7 @@ Al igual que en el caso sin ruido tenemos un resultado sobre la distribución co
 \end{equation}
 Donde la media y covarianza son:
 \begin{align}
-	m_{X^*|X} & = m(X^*) + K(X^*, X) \left[K(X, X) + \sigma_n^2\mathbb{I}\right]^{-1} \left(Y - m(X)\right)\\
+	m_{X^*|X} & = m(X^*) + K(X^*, X) \left[K(X, X) + \sigma_n^2\mathbb{I}\right]^{-1} \left(Y - m(X)\right) \label{eq:gp_posterior_media}\\
 	\Sigma_{X^*|X} & = K(X^*, X^*) - K(X^*, X) \left[K(X, X) + \sigma_n^2\mathbb{I}\right]^{-1} K(X, X^*)
 \end{align}
 
@@ -262,6 +265,7 @@ Si comparamos la figura \ref{fig:gpostconruido} con la figura \ref{fig:gpostsinr
 \section{Metodología}
 
 \subsection{Datos: descripción, prepocesamiento y análisis exploratorio}
+\label{subsec:datosprepoc}
 Como mencionamos en la sección \ref{sec:introd} los datos son de producción de petróleo y gas mensual desde 2006 publicada por la Secretaría de Energía de la Nación, abiertos y accesibles desde:\\
 
 \url{https://datos.gob.ar/dataset/energia-produccion-petroleo-gas-por-pozo-capitulo-iv}\\
@@ -296,11 +300,11 @@ Como los procesos gaussianos que se desean usar en este trabajo son alimentados 
 	
 	\item Hablar sobre la medida de incertidumbre dada naturalmente por el $\gp$: la diagonal de la covarianza.
 	
-	\item Describir el o los diseños del kernel para esta serie de tiempo particular: término de tendencia a largo plazo, término de estacionalidad, término de irregularidades a corto plazo, ¿término de ruido?, ¿otros?. Hay un ejemplo interesante de esto en \url{https://scikit-learn.org/stable/auto_examples/gaussian_process/plot_gpr_co2.html#design-the-proper-kernel}.
+	\item Describir el o los diseños del kernel para esta serie de tiempo particular que se usaron para experiementar para la predicción: término de tendencia a largo plazo, término de estacionalidad, término de irregularidades a corto plazo, ¿término de ruido?, ¿otros?. Hay un ejemplo interesante de esto en \url{https://scikit-learn.org/stable/auto_examples/gaussian_process/plot_gpr_co2.html#design-the-proper-kernel}.
 	
 	También se puede ver \cite{tesisduvenaud} y \url{https://www.cs.toronto.edu/~duvenaud/cookbook/}.
 	
-	Cada término es un kernel, y la suma de kernels es un kernel.
+	Cada término es un kernel, la suma de kernels es un kernel, el producto de dos kernels es un kernel.
 	
 	\item ¿Acá o en Marco Teórico? Describir la influencia de los parámetros de cada kernel. Hablar de la optimización de los parámetros a partir de los datos (hay una explicación linda de esto en \cite{tobar}). Optimización de los parámetros: máxima verosimilitud y/o MCMC.
 \end{itemize}
@@ -309,10 +313,56 @@ Como los procesos gaussianos que se desean usar en este trabajo son alimentados 
 
 \section{Resultados y discusión}
 
+\subsection{Resultados preliminares y análisis}
+A partir de los datos de producción mensual de petróleo preprocesados como se describió en \ref{subsec:datosprepoc}, se estandarizaron y se procedió a realizar predicciones usando $\gp$s. Al tener ahora los datos media cero, solamente hace falta modelar la covarianza (o kernel).
+
+Como primera elección de diseño básica se utilizó un kernel RBF. Para este caso de elección de diseño de kernel, es natural asumir que los datos posean algo de ruido, a pesar de que en realidad no lo tengan (al menos en teoría), pues el RBF posee dos parámetros: una de varianza, que intenta capturar la tendencia a largo plazo de la serie temporal (o al menos su ruido intrínseco), y otro de escala que intenta capturar la correlación temporal entre datos (es decir el período temporal de influencia).
+
+La magnitud del ruido supuesto para los datos influirá en la optimización de los parámetros del kernel RBF al entrenar el $\gp$, pues intuitivamente a menor ruido menor será el período de correlación temporal y por lo tanto también menor la tendencia a largo plazo. Dicho de otra forma a menor ruido el kernel se optimizará mucho más localmente.
+
+Recordemos que los datos disponibles van desde Enero de 2006 hasta Marzo de 2023. Supongamos que queremos predicir los últimos seis meses. Asumiendo un ruido en los datos con varianza de $0.05$ (recordar que los datos están estandarizados) vemos que el kernel se optimizó de manera muy local, como muestra la figura \ref{fig:pred1}.
+
+Si ahora asumimos que el ruido tiene una varianza de $0.1$ ya vemos el efecto menos local de la predicción, como se puede observar en la figura \ref{fig:pred2}. Este efecto se ve intensificado asumiendo ruido con varianza $0.5$ como muestra la figura \ref{fig:pred3}, en donde ya vemos que la predicción comienza a capturar mejor la tendencia de los datos.
+
+Esencialmente al aumentar el ruido de los datos, la optimización del parámetro $l$ del kernel RBF es mayor, interpretándose esto como una correlación a mayor período temporal. Esto se puede ver de la definición del kernel RBF que a continuación recordamos:
+\begin{align}
+	K_{SE}(x_1,x_2) = \sigma^2 \text{exp}\left(-\frac{(x_1-x_2)^2}{2l^2}\right) %\label{covSE}
+\end{align} 
+Podemos observar que a mayor valor de $l$ mayor deberá ser la diferencia entre $x_1$ y $x_2$ para que la misma sea una correlación con influencia relevante. Esto también se puede relacionar con la influencia de la covarianza en la media posterior dada por la ecuación \ref{eq:gp_posterior_media}.
+
+\subparagraph{COMENTARIO PARA MI:} acá se puede hablar un poco de cómo esa inversa de la K en la media posterior se puede interpretar como un leverage.
+
+Por otro lado estos primeros resultados preliminares también ponen en evidencia las limitaciones del kernel RBF, en donde su falta de flexibilidad hacen que al ganar localidad se pierda predicción sobre la tendencia a más largo plazo (figura \ref{fig:pred1}), y contrariamente al perder localidad, es decir ganar tendencia a más largo plazo, se pierda la tendencia más local (si se quiere la periodicidad local en este caso, como se ve en la figura \ref{fig:pred3}). Esto hace pensar en experimentar con un diseño de kernel más complejo, por ejemplo suma de dos kernels (que sigue siendo un kernel) donde uno se encargue de capturar la tendencia más a largo plazo, y el otro la tendencia periódica más local.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[trim={0cm 0cm 0cm 0cm},clip,width=\textwidth]{pred1.png}
+	\caption{Predicción de los últimos 6 meses de la producción total mensual de petróleo.}
+	\label{fig:pred1}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[trim={0cm 0cm 0cm 0cm},clip,width=\textwidth]{pred2.png}
+	\caption{Predicción de los últimos 6 meses de la producción total mensual de petróleo.}
+	\label{fig:pred2}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[trim={0cm 0cm 0cm 0cm},clip,width=\textwidth]{pred3.png}
+	\caption{Predicción de los últimos 6 meses de la producción total mensual de petróleo.}
+	\label{fig:pred3}
+\end{figure}
+
+
+
+
+\subsection*{Punteo de cosas para poner en esta sección}
 \begin{itemize}
-	\item Poner el resultado mínimo previo utilizando un kernel RBF.
+	\item Poner el resultado mínimo previo utilizando un kernel RBF. DONE.
 	
-	\item Si da el tiempo: probar con distintos kernels (leáse suma de) y con distintas ventanas de tiempo hacia atrás para predecir. Intuición: la ventana determina en cierta medida el kernel. Implicancias de la intuición: posible rediseño del kernel cada vez que se desea predecir.
+	\item Si da el tiempo: probar con distintos kernels (leáse suma/producto de) y con distintas ventanas de tiempo hacia atrás para predecir. Intuición: la ventana determina en cierta medida el kernel. Implicancias de la intuición: posible rediseño del kernel cada vez que se desea predecir.
 	
 	Se puede leer del cap. 2 de \cite{tesisduvenaud}. Una explicación más informal de lo mismo está en \url{https://www.cs.toronto.edu/~duvenaud/cookbook/}.
 	
@@ -327,9 +377,10 @@ Como los procesos gaussianos que se desean usar en este trabajo son alimentados 
 
 
 \section{Conclusiones}
+Not yet...
 
 
-\section{Ideas que todavía no puse en ningún lado}
+\section*{Ideas que todavía no puse en ningún lado}
 \begin{itemize}
 	\item Relacionar los modelos aditivos de series de tiempo clásicos: tendencia largo plazo + estacionalidad1 + estacionalidad2 + ... + irregularidades + ruido, con la aditividad de kernels. Intuición de esto: cada kernel modela un término del clásico.
 	
